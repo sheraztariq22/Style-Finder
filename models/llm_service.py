@@ -1,57 +1,51 @@
 """
-Service for interacting with the Llama 3.2 Vision Instruct model.
+Service for interacting with Google Gemini Vision models.
 """
 
 import logging
-from ibm_watsonx_ai import Credentials
-from ibm_watsonx_ai import APIClient
-from ibm_watsonx_ai.foundation_models import ModelInference
-from ibm_watsonx_ai.foundation_models.schema import TextChatParameters
+import google.generativeai as genai
+from PIL import Image
+import io
+import base64
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class LlamaVisionService:
+class GeminiVisionService:
     """
-    Provides methods to interact with the Llama 3.2 Vision Instruct model.
+    Provides methods to interact with Google Gemini Vision models.
     """
     
-    def __init__(self, model_id, project_id, region="us-south", 
-                 temperature=0.2, top_p=0.6, api_key=None, max_tokens=2000):
+    def __init__(self, api_key, model_name="gemini-2.0-flash-exp", 
+                 temperature=0.2, top_p=0.6, max_tokens=2000):
         """
         Initialize the service with the specified model and parameters.
         
         Args:
-            model_id (str): Unique identifier for the model
-            project_id (str): Project ID to associate the task
-            region (str): Region for the watsonx AI service
+            api_key (str): Google API key for authentication
+            model_name (str): Name of the Gemini model to use
             temperature (float): Controls randomness in generation
             top_p (float): Nucleus sampling parameter
-            api_key (str, optional): API key for authentication
             max_tokens (int): Maximum tokens in the response
         """
-        # Set up authentication credentials
-        credentials = Credentials(
-            url=f"https://{region}.ml.cloud.ibm.com",
-            api_key=api_key
-        )
-        self.client = APIClient(credentials)
+        # Configure the API
+        genai.configure(api_key=api_key)
         
-        # Define parameters for the model's behavior
-        params = TextChatParameters(
-            temperature=temperature,
-            top_p=top_p,
-            max_tokens=max_tokens
+        # Set up generation configuration
+        self.generation_config = {
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_output_tokens": max_tokens,
+        }
+        
+        # Initialize the model
+        self.model = genai.GenerativeModel(
+            model_name=model_name,
+            generation_config=self.generation_config
         )
         
-        # Initialize the model inference object
-        self.model = ModelInference(
-            model_id=model_id,
-            credentials=credentials,
-            project_id=project_id,
-            params=params
-        )
+        logger.info(f"Initialized Gemini model: {model_name}")
     
     def generate_response(self, encoded_image, prompt):
         """
@@ -65,40 +59,28 @@ class LlamaVisionService:
             str: Model's response
         """
         try:
-            logger.info("Sending request to LLM with prompt length: %d", len(prompt))
+            logger.info("Sending request to Gemini with prompt length: %d", len(prompt))
             
-            # Create the messages object
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": "data:image/jpeg;base64," + encoded_image,
-                            }
-                        }
-                    ]
-                }
-            ]
+            # Decode base64 image
+            image_data = base64.b64decode(encoded_image)
+            image = Image.open(io.BytesIO(image_data))
             
-            # Send the request to the model
-            response = self.model.chat(messages=messages)
+            # Create the content parts
+            content = [prompt, image]
             
-            # Extract and validate the response
-            content = response['choices'][0]['message']['content']
+            # Generate response
+            response = self.model.generate_content(content)
             
-            logger.info("Received response with length: %d", len(content))
+            # Extract the text from response
+            content_text = response.text
+            
+            logger.info("Received response with length: %d", len(content_text))
             
             # Check if response appears to be truncated
-            if len(content) >= 7900:  # Close to common model limits
-                logger.warning("Response may be truncated (length: %d)", len(content))
+            if len(content_text) >= 7900:
+                logger.warning("Response may be truncated (length: %d)", len(content_text))
             
-            return content
+            return content_text
             
         except Exception as e:
             logger.error("Error generating response: %s", str(e))
