@@ -22,7 +22,9 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
+# Gradio
+.gradio/
+gradio_queue.db
 # Virtual environments
 venv/
 env/
@@ -53,3 +55,4 @@ Thumbs.db
 *.log
 *.tmp
 temp/
+swift-style-embeddings.pkl
