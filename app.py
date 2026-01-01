@@ -9,7 +9,7 @@ from tempfile import NamedTemporaryFile
 
 # Import local modules
 from models.image_processor import ImageProcessor
-from models.llm_service import LlamaVisionService
+from models.llm_service import GeminiVisionService
 from utils.helpers import get_all_items_for_image, format_alternatives_response, process_response
 import config
 
@@ -44,10 +44,19 @@ class StyleFinderApp:
             norm_std=config.NORMALIZATION_STD
         )
         
-        self.llm_service = LlamaVisionService(
-            model_id=config.LLAMA_MODEL_ID,
-            project_id=config.PROJECT_ID,
-            region=config.REGION
+        # Check if API key is available
+        if not config.GEMINI_API_KEY:
+            raise ValueError(
+                "Google API key not found. Please set GOOGLE_API_KEY environment variable.\n"
+                "Get your API key from: https://makersuite.google.com/app/apikey"
+            )
+        
+        self.llm_service = GeminiVisionService(
+            api_key=config.GEMINI_API_KEY,
+            model_name=config.GEMINI_MODEL,
+            temperature=config.TEMPERATURE,
+            top_p=config.TOP_P,
+            max_tokens=config.MAX_TOKENS
         )
 
     def process_image(self, image):
@@ -121,7 +130,7 @@ def create_gradio_interface(app):
             # Fashion Style Analyzer
             
             Upload an image to analyze fashion elements and get detailed information about the items.
-            This application combines computer vision, vector similarity, and large language models 
+            This application combines computer vision, vector similarity, and Google Gemini AI 
             to provide detailed fashion analysis.
             """
         )
@@ -215,12 +224,16 @@ def create_gradio_interface(app):
             
             This system analyzes fashion images using:
             
-            - **Image Encoding**: Converting fashion images into numerical vectors
-            - **Similarity Matching**: Finding visually similar items in a database
-            - **Advanced AI**: Generating detailed descriptions of fashion elements
+            - **Image Encoding**: Converting fashion images into numerical vectors using ResNet50
+            - **Similarity Matching**: Finding visually similar items in a database using cosine similarity
+            - **Google Gemini AI**: Generating detailed descriptions of fashion elements
             
             The analyzer identifies garments, fabrics, colors, and styling details from images.
             The database includes information on outfits with brand and pricing details.
+            
+            ---
+            
+            **Powered by Google Gemini AI**
             """
         )
     
@@ -241,4 +254,4 @@ if __name__ == "__main__":
             share=True  # Set to False if you don't want to create a public link
         )
     except Exception as e:
-        print(f"Error starting the application: {str(e)}") 
+        print(f"Error starting the application: {str(e)}")
